@@ -1,0 +1,4 @@
+name = CKAN Datasets Integration
+description = Get dataset and facet information from Catalog.
+core = 7.x
+package = REI Systems

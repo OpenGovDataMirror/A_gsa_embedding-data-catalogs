@@ -1,0 +1,1765 @@
+<?php
+
+//admin interface
+/**
+* Implement hook_menu().
+*/
+function ckan_integration_menu() {
+  $items = array();
+
+  $items['admin/config/content/ckan_info'] = array(
+    'title' => 'CKAN Integration Settings',
+    'description' => 'Configuration for the CKAN Integration module.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ckan_integration_create_form'),
+    'access arguments' => array('access administration pages'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+function ckan_integration_create_form($form, &$form_state){
+
+  $form['resultsperpage'] = array(
+    '#type' => 'select',
+    '#title' => t('Results per page'),
+    '#options' => array(10=>10, 15=>15, 20=>20, 25=>25, 30=>30),
+    '#default_value' => variable_get('resultsperpage', 20),
+	'#required' => TRUE,
+  );
+
+  $form['ckan_server_info'] = array(
+    '#type' => 'textfield',
+	'#title' => t('Default Server'),
+	'#description' => 'Please enter the server info. Example: http://catalog.data.gov/',
+	'#default_value' => variable_get('ckan_server_info', 'http://catalog.data.gov/'),
+	'#required' => TRUE,		
+	
+  );
+
+  $form['org_server_info'] = array(
+	 '#type' => 'textfield',
+	 '#title' => ('Organization Server Address'),
+	 '#description' => t('The address to get the organization structure in a JSON format.'),
+	 '#default_value' => variable_get('org_server_info', 'http://idm.data.gov/agency.json'),
+	 '#required' => TRUE,
+  );
+
+  $form['#validate'][] = 'ckan_integration_create_form_validate';
+
+  return system_settings_form($form);
+  
+}
+
+function ckan_integration_create_form_validate($form, &$form_state){
+		
+	if (!valid_url($form_state['values']['ckan_server_info'], TRUE)) {
+        form_set_error('ckan_server_info', t('Please provide a valid URL'));
+    }
+
+}
+
+//dynamic block code
+function ckan_integration_block_info() {
+  
+  $blocks = array();
+  
+  //facets
+  $blocks['facet_metadata_type'] = array(
+    'info' => t('CKAN Facet - Dataset Type'),
+  );
+  
+  $blocks['facet_tags'] = array(
+    'info' => t('CKAN Facet - Tags'),
+  );
+  
+  $blocks['facet_res_format'] = array(
+    'info' => t('CKAN Facet - Formats'),
+  );  
+  
+  $blocks['facet_groups'] = array(
+    'info' => t('CKAN Facet - Groups'),
+  );  
+
+  $blocks['facet_organization_type'] = array(
+    'info' => t('CKAN Facet - Organization Types'),
+  );    
+  
+  $blocks['facet_organization'] = array(
+    'info' => t('CKAN Facet - Organizations'),
+  );   
+
+  $blocks['facet_vocab_category_all'] = array(
+    'info' => t('CKAN Facet - Community Categories'),
+  );  
+
+  $blocks['progress'] = array(
+    'info' => t('CKAN Facet - Status'),
+  );    
+  
+  //data block
+  $blocks['data_content'] = array(
+    'info' => t('CKAN - Data'),
+  ); 
+  
+ //search block
+  $blocks['search_form'] = array(
+    'info' => t('CKAN - Search'),
+  ); 
+  
+  //sort block
+  $blocks['sort_content'] = array(
+    'info' => t('CKAN - Sort'),
+  ); 
+  
+  //result block
+  $blocks['result_content'] = array(
+    'info' => t('CKAN - Result'),
+  ); 
+  
+  //Dataset Type block
+  $blocks['selected_constraints'] = array(
+    'info' => t('CKAN - Selected Constraints'),
+  ); 
+
+  //Pagination block
+  $blocks['pagination'] = array(
+    'info' => t('CKAN - Pagination'),
+  ); 
+  
+  //Individual dataset block
+  $blocks['dataset_info'] = array(
+    'info' => t('CKAN - Dataset Information'),
+  );
+  
+  //Individual dataset - Org Banner block
+  $blocks['dataset_org_banner'] = array(
+    'info' => t('CKAN - Dataset Organization Banner'),
+  );
+  
+  //Selected Resource Info Block
+  $blocks['dataset_sel_resource'] = array(
+    'info' => t('CKAN - Dataset Selected Resource Block'),
+  );
+  
+  //Additional Resource Information
+  $blocks['dataset_add_resource_info'] = array(
+    'info' => t('CKAN - Dataset Additional Resource Info'),
+  );
+  
+  //Resource List Block
+  $blocks['dataset_resource_list'] = array(
+    'info' => t('CKAN - Dataset Resource List'),
+  );
+    
+  return $blocks;
+}
+
+
+function ckan_integration_block_view($delta = '') {
+
+  $org_mapping = array(
+	                'Federal Organization' => 'Federal Government',
+					'State Organization' => 'State Government',
+					'Local Government' => 'Local Government',
+					'University Organization' => 'University',
+					'Non Profit' => 'Non-Profit',
+					'Other Organization' => 'Other',
+					'Commercial' => 'Commercial',
+	             );
+				 
+  switch ($delta) {
+    case 'facet_metadata_type':
+	
+	  $block['subject'] = t('');
+      $block['content'] = get_facet_block_content('metadata_type', 'Dataset Type');	
+      break;
+	  
+	case 'facet_tags':  
+	
+	  $block['subject'] = t('');
+      $block['content'] = get_facet_block_content('tags', 'Tags');	  
+      break;
+	  
+	case 'facet_res_format':  
+	
+	  $block['subject'] = t('');
+      $block['content'] = get_facet_block_content('res_format', 'Formats');
+      break;	  
+	  
+	case 'facet_groups':  
+	
+	  $block['subject'] = t('');
+      $block['content'] = get_facet_block_content('groups', 'Groups');	  
+      break;
+
+	case 'facet_organization_type':  
+	
+	  $block['subject'] = t('');
+      $block['content'] = get_facet_block_content('organization_type', 'Organization Types');  
+      break;
+
+	case 'facet_organization':  
+	
+	  $block['subject'] = t('');
+      $block['content'] = get_facet_block_content('organization', 'Organizations');  
+      break;
+
+	case 'facet_vocab_category_all':  
+	
+	  $block['subject'] = t('');
+      $block['content'] = get_facet_block_content('vocab_category_all', 'Community Categories');
+	  break;	
+
+	case 'progress':  
+	
+	  $block['subject'] = t('');
+      $block['content'] = get_facet_block_content('progress', 'Status');
+	  break;		  
+	
+	case 'data_content':  
+	
+	  $block['subject'] = t('');
+	  $block['content'] = get_data_block($org_mapping);  
+	  break;	  
+
+    case 'search_form':	 
+
+		$block['subject'] = t('');
+		$block['content'] = drupal_get_form('ckan_integration_custom_search');
+		break;
+	  
+	case 'result_content':
+	  
+	  $block['subject'] = t('');
+	  $block['content'] = get_result_content();
+	  break;
+	  
+	case 'sort_content':
+	
+	  $block['subject'] = t('');
+	  $block['content'] = drupal_get_form('custom_sort_form');
+	  break;  	
+
+	case 'selected_constraints':
+	
+	  $block['subject'] = t('');
+	  $block['content'] = ckan_integration_get_selected_constraints();
+	  break;  	
+
+	case 'pagination':
+	
+	  $block['subject'] = t('');
+	  $block['content'] = ckan_integration_get_pagination();
+	  break;  
+
+	case 'dataset_info':
+	
+	  $block['subject'] = t('');
+	  $block['content'] = ckan_integration_dataset_main_info(arg(2));
+	  break;  
+
+	case 'dataset_org_banner': 
+	
+	  $block['subject'] = t('');
+	  $block['content'] = ckan_integration_dataset_org_banner(arg(2), $org_mapping);
+	  break;
+	
+	case 'dataset_sel_resource': 
+	  
+	  $block['subject'] = t('');
+	  $block['content'] = ckan_integration_sel_resource(arg(3), arg(5));
+	  break;
+  
+	case 'dataset_add_resource_info':
+	
+	  $block['subject'] = t('');
+	  $block['content'] = ckan_integration_add_resource_info(arg(3), arg(5));
+	  break;	
+	
+	case 'dataset_resource_list':
+	  $block['subject'] = t('');
+	  $block['content'] = ckan_integration_get_resource_list(arg(3), arg(5));
+	  break;	
+	
+	
+  }
+  
+  return $block;
+}
+
+//returns facet blocks
+function get_facet_block_content($field_name, $title){
+    $q1 .= arg(0) . "/" . arg(1) . "/";
+    $q2  = arg(2);
+	
+    $ret = $_SESSION['ckan_integration_result'];
+	$facet_count = array();
+	  
+	foreach($ret['result']['search_facets'][$field_name]['items'] as $item){
+	  $facet_count[] = $item['count'];
+	}
+	  
+	array_multisort($facet_count, SORT_DESC, $ret['result']['search_facets'][$field_name]['items']);
+	
+	$content = '';
+	$content = '<section class="module module-narrow module-shallow"><h2 class="module-heading"><i class="icon-medium icon-filter"></i>';
+	$content .= $title;				  		  
+	//$content .= '<a class="action" href="">Clear All</a></h2>';
+    $clear_all_link = ckan_integration_clear_all_link($field_name);
+    $content .= $clear_all_link;
+    $content .= "</h2>";
+	
+	
+	if(sizeof($ret['result']['search_facets'][$field_name]['items']) == 0) {
+	  
+	  $content .= '<p class="module-content empty">There are no ' . $title . ' that match this search</p>';
+	}
+	else {
+		$content .= '<nav><ul class="unstyled nav nav-simple nav-facet">';
+
+		//get f.<face_name>.facet.limit since ckan does not allow solr parameter to manipulate the value
+		//we have to just hide extra facet constraints manually 
+
+		//match page parameter
+		$pattern = "/&" . $field_name . ".limit=\d+/";
+		// strip page parameter
+		$match = preg_match($pattern, $q2, $matches);
+
+		if ($match === 1) {
+		  //if set make facet_limit 50 //more facets
+		  $facet_limit = 50;
+		} else { 
+		  //default limit is 5 //less facets
+		  $facet_limit = 5;
+		}
+
+		$count = 0;
+		foreach($ret['result']['search_facets'][$field_name]['items'] as $item) {
+	      $count++; 
+		  //only traverses until limit is hit
+		  if ($count >$facet_limit) {
+			break;
+		  }
+		  if($item['display_name'] != "") {
+			$link = ckan_integration_facet_link($item['display_name'], $item['count'], $title, $field_name, $item['name']);
+			
+			$content .= '<li class="nav-item' . $link['active'] . '">';
+			$content .= $link['link'];
+			$content .= '</li>';
+		  }
+		}
+
+		//facet_limit to be included in generated "showmore/showless" urls
+		if ($facet_limit == 50) {
+		  $facet_limit = 5;
+		} else {
+		  $facet_limit = 50;
+		}
+	    $content .= '</ul></nav>';
+	    $content .= '<p class="module-footer">';
+        $content .= ckan_integration_show_more_facet_link($title, $field_name, $facet_limit);
+        $content .= '</p>';
+	}
+	
+    $content .= '</section>';
+	  
+	return $content;
+}
+
+//returns data block
+function get_data_block($org_mapping){
+	  $nid = arg(1); 
+	  $ret = $_SESSION['ckan_integration_result'];
+	 
+	  $org_str = $_SESSION['org_structure_json'];
+	
+	  $content = '';
+	  $content .= '<ul class="dataset-list unstyled">';
+
+	  //loop over each dataset
+	  foreach($ret['result']['results'] as $result) {
+	 
+	    $org_name = $result['organization']['name'];
+		
+		$org_type = $org_mapping[$org_str[$org_name]['vocabulary']];
+		
+	    $content .= '<li class="dataset-item has-organization">';
+		$content .= '<div class="dataset-content">';
+		
+		//org type
+		$content .= '<span class="organization-type" data-organization-type="' . strtolower(str_replace(' Government', '', $org_type)) . '" title="' . $org_type . '">';
+		$content .= '<span>' . check_plain(str_replace(' Government', '', $org_type)) . '</span>';
+        $content .= '</span>';
+
+		//title
+		$content .= '<h3 class="dataset-heading">'; 
+		
+		$data_url = $GLOBALS['base_url'] . "/" . arg(0) . '/';
+		
+		//check if child node exists
+		$check = db_query("SELECT 1 as exist from node where type = 'community_dataset_info_page' and status = 1 LIMIT 1");
+		
+		foreach($check as $exist) {
+		  if($exist->exist == '1') {
+		    $child_id_arr = db_query("select entity_id from field_data_field_parent dp
+                                      inner join node on nid = dp.entity_id 
+                                      where status = 1 and field_parent_nid = :nid", array(':nid' => $nid));
+		  
+		    foreach ($child_id_arr as $record) 
+		      $data_url .= $record->entity_id . '/';
+		  }
+		  
+		  $data_url .= $result['id'];
+		}
+		
+		$content .= l(check_plain($result['title']), $data_url, array('html' => ture));
+		$content .= '</h3>';
+		
+		//short description
+		$notes = $result['notes'];
+		$pos = strpos($notes, ' ', 155);
+		if ($pos !== false) {
+			$notes = substr($notes, 0, $pos);
+			$content .= '<div class="notes"><p class="dataset-organization">' . check_plain($result['organization']['title']) . ' -</p><div>' .  $notes . '...</div></div>';		
+		}			
+		else	
+			$content .= '<div class="notes"><p class="dataset-organization">' . check_plain($result['organization']['title']) . ' -</p><div>' .  $notes . '</div></div>';		
+		
+		//list of resources 
+		$content .= '<ul class="dataset-resources unstyled">';
+		
+		$i=0;
+		
+		//loop over resources
+		foreach($result['resources'] as $resource) {
+		    //dsm($resource);
+			//show only first 6 resources
+			if($i==6)
+			   break;
+			   
+			$content .= '<li>';		
+			if($resource['format'] == '' /*|| $resource['name'] == 'Web Page'*/) {
+	
+				$content .= l("HTML", $resource['url'], array('html' => ture, 'attributes' => array('class' => 'label', 'data-format' => 'html', 'target' => '_blank')));
+			}
+			elseif($resource['format'] == 'ArcGIS Online Map') {
+				$content .= l($result['resources'][$i]['format'], $resource['url'], array('html' => ture, 'attributes' => array('class' => 'label', 'data-format' => strtolower($resource['format']), 'target' => '_blank')));			
+			}
+			else {
+			
+				$content .= l($result['resources'][$i]['format'], $resource['url'], array('html' => ture, 'attributes' => array('class' => 'label', 'data-format' => strtolower($resource['format']))));
+			}
+			
+			$content .= '</li>';
+			
+			
+			$i++;
+		}
+
+		//if more than 6 resources add 'more in dataset' link
+		if($result['num_resources'] > 6) {	
+
+			$content .= '<li>';			
+			$content .= l(($result['num_resources'] - 6) . ' more in dataset', $data_url, array('html' => ture, 'attributes' => array('class' => 'more')));
+			$content .= '</li>';
+		}
+		
+		$content .= '</ul></div></li>';
+	  }
+
+	  $content .= '</ul>';
+	  
+	  return $content;
+}
+
+//custom search block
+function ckan_integration_custom_search($form, &$form_state) {
+
+	$form = array();
+	
+	$form['keyword'] = array(
+     '#type' => 'textfield',
+     '#title' => t(''),
+	 '#attributes' => array(
+					'placeholder' => t('Search datasets...'),
+					'class' => "search",
+				),
+	 '#prefix' => '<span class="control-group search-giant"><label class="hide" for="edit-keyword">Search datasets</label>',
+	);
+	
+    $form['submit'] = array(
+     '#type' => 'submit',
+     '#value' => t('Search'),
+	 '#suffix' => '</span>',
+    );
+	
+
+    $form['#submit'] = array('ckan_integration_custom_search_form_submit');
+
+    return $form;
+}
+
+//custom search form submit function
+function ckan_integration_custom_search_form_submit($form, &$form_state){
+
+	//process arg(2) - seperate sort and keyword parameters
+	$arg_arr = processArg2(arg(2));
+	$q = $arg_arr[0];
+	$sort = $arg_arr[2];
+	
+  //remove page from query
+  $q = ckan_integration_remove_page_from_query($q);
+
+	//replace old keyword with new keyword value
+    if(strlen(arg(2)) > 0)
+		$redirect_url = arg(0) . "/" . arg(1) . "/" . $q . "&keyword=" . $form_state['input']['keyword'] . "&sort=" . $sort;
+	else
+		$redirect_url = arg(0) . "/" . arg(1) . "/&keyword=" . $form_state['input']['keyword']. "&sort=" . $sort;
+
+	//redirect to new url
+	drupal_goto($redirect_url);
+}
+
+//Custom sort block
+function custom_sort_form($form, &$form_state) {
+
+	$form = array();
+	
+	$form['sort'] = array(
+     '#type' => 'select',
+     '#title' => t('Order by:'),
+	 '#options' => array(
+       'score desc, name asc' => t('Relevance'),
+       'title_string asc' => t('Name Ascending'),
+	   'title_string desc' => t('Name Descending'),
+	   'metadata_modified desc' => t('Last Modified'),
+	   'views_recent desc' => t('Popular'),
+      ),
+	  '#attributes' => array('onchange' => "form.submit('sort')"),
+	);
+	
+	$form['submit'] = array(
+     '#type' => 'submit',
+     '#value' => t('Go'),
+	 '#attributes' => array(
+	 		 	 'class' => array('btn js-hide'),
+				),
+    );
+	
+	$form['#submit'] = array('custom_sort_form_submit');
+	
+	return $form;
+
+}
+
+//custom search form submit function
+function custom_sort_form_submit($form, &$form_state) {
+
+    //process arg(2) - seperate sort and keyword parameters
+	$arg_arr = processArg2(arg(2));
+	
+	$q = $arg_arr[0];
+	$q = ckan_integration_remove_page_from_query($q);
+	$keyword = $arg_arr[1];
+	
+	//replace old sort with new sort value
+    if(strlen(arg(2)) > 0)
+		$redirect_url = arg(0) . "/" . arg(1) . "/" . $q . "&keyword=" . $keyword . "&sort=" . $form_state['input']['sort'];
+	else
+		$redirect_url = arg(0) . "/" . arg(1) . "/&keyword=" . $keyword . "&sort=" . $form_state['input']['sort'];
+
+	
+	//redirect to new url	
+	drupal_goto($redirect_url);
+}
+
+//alter custom search form and custom sort form to set value after submit.
+function ckan_integration_form_alter(&$form, &$form_state, $form_id){
+  
+   
+   $arg_arr = processArg2(arg(2));
+   $keyword = $arg_arr[1];
+   $sort = $arg_arr[2];
+	
+   switch ($form_id) {
+	  
+    case 'ckan_integration_custom_search':
+	
+	  $form['keyword']['#value'] =  $keyword;
+	  
+	  break;
+	
+	case 'custom_sort_form' : 
+	  
+	  $form['sort']['#value'] =  $sort;
+	  
+	  break;
+   }
+}
+
+//result block
+function get_result_content(){
+	  	      
+	  $ret = $_SESSION['ckan_integration_result']; 
+	  
+	  $arg_arr = processArg2(arg(2));
+	
+	  //$q = $arg_arr[0];
+	  $keyword = $arg_arr[1];
+
+	  $content = '';	  
+	  
+	  //result
+	  $content .= '<strong>'; 
+	  
+	  if($keyword == "")
+	    $content .= number_format($ret['result']['count']) . ' datasets found'; 
+	  else
+	    $content .= number_format($ret['result']['count']) . ' datasets found for "' . $keyword . '"'; 
+		
+	  $content .= '</strong>';
+	  
+	  return $content;
+}
+
+//get json result from ckan api call
+function get_json_result($url){
+
+	  $response = drupal_http_request($url);
+	  $ret = json_decode($response->data, true);
+	  
+	  return $ret;
+
+}
+
+/**
+ * This function returns content for selected_constraints block
+ */
+function ckan_integration_get_selected_constraints() {
+  //TODO: sanitize input
+  $q1 .= arg(0) . "/" . arg(1) . "/";
+  
+  //generate list of filtered pills
+  $content .= '<div class="filter-list">';
+  if (isset($_SESSION['ckan_integration_selected_constraints'])) {
+    foreach($_SESSION['ckan_integration_selected_constraints'] as $key=>$value) {
+      //remove page from query
+      $value = ckan_integration_remove_page_from_query($value);
+
+      $content .= '<span class="facet">' . $key . ':</span>'; 
+      foreach($value as $key1=>$value1) {
+        $link = '<span class="filtered pill">' . $key1  . l('<i class="icon-remove"></i>', $q1 . $value1, array("html" => true, 'attributes' => array('class' => 'remove', 'title' => 'Remove'))) . '</span>'; 
+        $content .= $link;
+      }
+    }
+  }
+  $content .= '</div>';
+
+  return $content;
+}
+
+
+/**
+ * This function returns content for pagination block
+ */
+function ckan_integration_get_pagination() {
+  //TODO: sanitize input
+  $q1 .= arg(0) . "/" . arg(1) . "/";
+  $q2  = arg(2);
+
+  //match page parameter
+  $pattern = "/&page=\d+/";
+  // strip page parameter
+  $match = preg_match($pattern, $q2, $matches);
+
+  if ($match === 1) {
+    $current_page = str_replace("&page=", "", $matches[0]);
+  } else {
+    $current_page = "";
+  }
+
+  //total number of results
+  $total_results = $_SESSION['ckan_integration_result']['result']['count'];
+  //datasets per page
+  $datasets_per_page = variable_get('resultsperpage', 20);
+  //total number of pages
+  $total_pages = ceil($total_results/$datasets_per_page);
+
+
+  // Check that the page number is set.
+  if(!isset($current_page)){
+    $current_page = 0;
+  }else{
+    // Convert the page number to an integer
+    $current_page = (int)$current_page;
+  }
+
+  $previous = $current_page-1;
+  $next = $current_page==0?$current_page+2:$current_page+1;
+
+  // If the page number is less than 1, make it 1.
+  if($current_page < 1){
+    $current_page = 1;
+    $previous = "";
+    // Check that the page is below the last page
+  } else 
+  if($current_page > $total_pages){
+    $current_page = $total_pages;
+  } else 
+  if ($current_page == $total_pages) {
+    $next = "";
+  }
+
+  // strip page parameter from URL
+  $q2 = preg_replace($pattern , "" , $q2);
+
+  $content .= '<div class = "pagination pagination-centered">';
+  $content .= '<ul>';
+
+  //add previous link
+  if ($previous != "") {
+    $content .= '<li>' . l("«", $q1 . $q2 . "&page=".$previous). '</li>';
+  }
+
+  foreach(range(1, $total_pages) as $page){
+    // Check if we're on the current page in the loop
+    if($page == $current_page){
+      $content .= '<li class="active">' . l($page, $q1 . $q2 . "&page=".$page). '</li>';
+    }else if($page == 1 || $page == $total_pages || ($page >= $current_page - 2 && $page <= $current_page + 2)){
+      //add "..." to the right
+      if (($current_page <= $total_pages-4) && ($page == $total_pages) && $total_pages >=5) {
+        $content .= '<li class="disabled"><span>...</span></li>';
+      }
+      $content .= '<li>' . l($page, $q1 . $q2 . "&page=".$page) . '</li>';
+      // add "..." to the left
+      if (($current_page >= 5) && ($page ==1) && ($total_pages >=5)) {
+        $content .= '<li class="disabled"><span>...</span></li>';
+      }
+    }
+  }
+
+  //add next link
+  if ($next != "") {
+    $content .= '<li>' . l("»", $q1 . $q2 . "&page=".$next). '</li>';
+  }
+
+  $content .= '</ul>';
+  $content .= '</div>';
+
+  if ($total_results <= $datasets_per_page) {// do not show pagination if number of results <= results per page
+    return "";
+  } else {
+    return $content;
+  }
+}
+
+/**
+ *Format facet links
+ * @param array $facet
+ *   Constraint display name and value
+ * @param string constraint
+ *   Actual constraint that we are going to filter upon
+ * @param string display_name
+ *   Title of the link
+ * @param int constraint_count
+ *  Number of returned constraint for $facet
+ * @return array('link' => $l, 'active' => $active) 
+ *   Formatted facet constraint link
+ */
+
+ function ckan_integration_facet_link($display_name, $constraint_count, $title, $facet, $constraint) {
+   $q1 .= arg(0) . "/" . arg(1) . "/";
+   $q2  = arg(2);
+   
+   $constraint = urlencode($constraint);
+
+   //remove fitler.limit fields from url
+   //$q2 = ckan_integration_remove_facet_limit_from_query($q2);
+
+   //look for fq tag
+   $pos = strpos($q2, "&fq=");
+   
+   //if there is no fq tag, just add it
+   if ($pos===FALSE) {
+     $q2 .= "&fq=";
+   }
+    
+   $facet_constraint = $facet . ':"' . $constraint .'"';
+
+   //search for constraint
+   $pos = strpos($q2, $facet_constraint);
+
+   //link active default value
+   $active = "";
+
+   if ($pos=== FALSE) { //if constrain is not found add facet constraint (+maybe AND operator)
+     $q2= str_replace("&fq=", "&fq=" . $facet_constraint . "+AND+", $q2); 
+     //remove facet constraint from session variable in order to use it later in selected_constraints block
+     unset($_SESSION['ckan_integration_selected_constraints'][$title][$display_name]);
+     if ($_SESSION['ckan_integration_selected_constraints'][$title] == array()) {
+       unset($_SESSION['ckan_integration_selected_constraints'][$title]);
+     }
+
+   } else { //else remove the constraint
+     $q2= substr_replace($q2, "", $pos, strlen($facet_constraint . "+AND+")); 
+
+     //link is active
+     $active = " active";
+
+     //add facet constraint to session variable in order to use it later in selected_constraints block
+     $_SESSION['ckan_integration_selected_constraints'][$title][$display_name] = $q2;
+
+   }
+
+  //remove page from query
+  $q2 = ckan_integration_remove_page_from_query($q2);
+  
+  if(strlen($display_name) > 19){
+    $l = l("<span>" . check_plain(substr($display_name, 0, 19)) . "... (" . check_plain($constraint_count) . ")</span>", $q1 . $q2, array('html' => ture));
+  }else {
+    $l = l("<span>" . check_plain($display_name) .  " (" . check_plain($constraint_count) . ")</span>", $q1 . $q2, array('html' => true));
+  }
+   return array('link' => $l, 'active' => $active);
+ }
+ 
+
+/**
+ * @param string $facet
+ *   Constraint facet name
+ * @return string $l 
+ *   Formatted "clear all" link
+ */
+function ckan_integration_clear_all_link($facet) {
+  $q1 .= arg(0) . "/" . arg(1) . "/";
+  $q2  = arg(2);
+
+  // match all facet constraints i.e. (tags:oceans+AND+)
+  $pattern = "/" . $facet . ':".+?"\+AND\+/';
+  $q2 = preg_replace($pattern , "" , $q2);
+
+  return l('Clear All', $q1 . $q2);
+ }
+
+/**
+ * @param string $facet_title
+ *   The title of the facet
+ * @param string $facet
+ *   Constraint facet name
+ * @return string $l 
+ *   Formatted "show more {facet name}" link
+ */
+function ckan_integration_show_more_facet_link($facet_title, $facet, $limit) {
+  $q1 .= arg(0) . "/" . arg(1) . "/";
+  $q2  = arg(2);
+  
+  //add class
+  $options = array(
+    'attributes' => array (
+      'class' => 'read-more',
+    ),
+  );
+
+  if ($limit == 5) {
+    //remove fitler.limit fields from url
+    $q2 = ckan_integration_remove_facet_limit_from_query($q2);
+    return l('Show Only Popular ' . $facet_title, $q1 . $q2, $options);
+  } else {
+    return l('Show More ' . $facet_title, $q1 . $q2 . "&" . $facet . ".limit=0", $options);
+  }
+ }
+
+/**
+ * @param $q 
+ *   ckan query to be sent to api call
+ * @return $ 
+ *   Modified query
+ */
+function ckan_integration_remove_facet_limit_from_query($q) {
+  //match facet.limit parameter
+  $pattern = "/&[a-zA-Z_]{4,}.limit=\d+/";
+  // strip facet_limit
+  $q = preg_replace($pattern , "" , $q);
+  return $q;
+}
+
+/**
+ * @param $q 
+ *   ckan query to be sent to api call
+ * @return $ 
+ *   Modified query
+ */
+function ckan_integration_remove_page_from_query($q) {
+  //match facet.limit parameter
+  $pattern = "/&page=\d+/";
+  // strip facet_limit
+  $q = preg_replace($pattern , "" , $q);
+  return $q;
+}
+
+/**
+ * @param $q 
+ *   ckan query to be sent to api call
+ * @return $ 
+ *   Modified query
+ */
+function ckan_integration_remove_fq_from_query($q) {
+  //match fq= parameter
+  $pattern = "/&fq=&/";
+  $match = preg_match($pattern, $q);
+
+  if ($match === 1) {
+    // strip facet_limit
+    $q = preg_replace("/&fq=/" , "" , $q);
+  }
+  return $q;
+}
+   
+   
+/**
+ * Implements hook_node_load
+ */
+function ckan_integration_node_load($nodes, $types) {
+
+  //TODO: add all this to configuration page
+  $facet_limit_min = 5; 
+  $facet_limit_max = 50;
+  
+  $facets = array(
+    'metadata_type' => 'Dataset Type',
+    'tags' => 'Tags',
+    'res_format' => 'Formats',
+    'groups' => 'Groups',
+    'organization_type' => 'Organization Types',
+    'organization' => 'Organizations',
+    'vocab_category_all' => 'Community Categories',
+	'progress' => 'Status',
+  );
+  
+  $q = arg(2);
+  
+  if (in_array('community_dataset_page', $types)) { //current page is of community_dataset_page type
+
+    //remove leftover selected facet constraints ($_SESSION might be still left populated if user does a new search or goes directly to node/%)
+    unset($_SESSION['ckan_integration_selected_constraints']);
+
+    //facet parameters
+    foreach ($facets as $key=>$facet) {
+      //set default facet.limit session vars here 
+      if ($_SESSION['ckan_integration_' . $key] == ''){
+        $_SESSION['ckan_integration_' . $key] = $facet_limit_min;
+      }
+      if ($key == 'tags') {
+        $_SESSION['ckan_integration_tags'] = $facet_limit_max;
+      }
+      //TODO: for some reason this doesn't work. Need to figure out why.
+      //$q_ext .= "&facet.field=" . $key . "&f." . $key . ".facet.mincount=" . $_SESSION['ckan_integration_' . $key]; 
+      $q_ext .= "&facet.field=" . $key;
+    }
+    //dpr($q_ext);
+    $ckan_filter = reset($nodes)->field_ckan_filter['und'][0]['value'];
+
+    // redirect to filter if $ckan_filter is not empty
+    if ($ckan_filter != '' && $q == '') {
+      drupal_goto(urldecode($ckan_filter));
+    }
+
+  //process arg(2) and seperate out sort and keyword parameter for ckan api query
+	$arg_arr = processArg2(arg(2));
+	$q = $arg_arr[0];
+	$keyword = $arg_arr[1];
+	$sort = $arg_arr[2];
+	
+	if($sort == "")
+	   $sort = "score desc, name asc";
+	   
+    //for some reason ckan needs spaces converted to "+" so we are doing just that
+	$q = $q . "&sort=" . $sort;
+    $q = str_replace(" ","+", $q); 
+    
+    //replace page parameter with sorl start query parameter
+    $pattern = "/&page=\d+/";
+    $match = preg_match($pattern, $q, $matches);
+
+    if ($match === 1) {//there is a match
+
+      //datasets per page
+      $datasets_per_page = variable_get('resultsperpage', 20);
+      //total number of results
+      $total_results = $_SESSION['ckan_integration_result']['result']['count'];
+      //total number of pages
+      $total_pages = ceil($total_results/$datasets_per_page);
+
+      $current_page = str_replace("&page=", "", $matches[0]);
+
+      if ($current_page > $total_pages) { //if for some reason this is true(a facet constraint was clicked), reset current page to 1
+        $current_page = 1;
+      }
+
+      // convert to start 
+      $current_page = ($current_page*$datasets_per_page) - $datasets_per_page; 
+      // replace page parameter with start
+      $q = preg_replace($pattern , "&start=" . $current_page , $q);
+    }
+
+  //strip <facetname>.limit tags
+  $q = ckan_integration_remove_facet_limit_from_query($q);
+
+  //strip fq tag
+  $q = ckan_integration_remove_fq_from_query($q);
+
+	
+	if($keyword != "") {
+	  
+	  $keyword = str_replace(" ","+", $keyword);
+	  
+	  $q = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'api/3/action/package_search?q=' . $keyword . '+AND+dataset_type:dataset' . $q . $q_ext . '&rows=' . variable_get('resultsperpage', 20);
+	}
+	else
+	  $q = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'api/3/action/package_search?q=dataset_type:dataset' . $q . $q_ext . '&rows=' . variable_get('resultsperpage', 20);	
+	
+    $_SESSION['ckan_integration_result'] = get_json_result($q);
+	
+	dpr($q);
+    	
+	//get organization structure from json
+	$org = get_json_result(variable_get('org_server_info', 'http://idm.data.gov/agency.json'));
+	$_SESSION['org_structure_json'] = get_org_structure($org);
+	
+  }
+}
+
+/**
+ * Process arg(2) - remove existing keyword and sort argument from current url 
+ * and store in array for furthur processing
+ * @param string $arg2
+ *   arg(2)
+ * @return array array('$q' => , '$keyword' =>, '$sort' =>
+ *   $q: processed arg(2), $keyword: keyword value from url, $sort: sort value from url 
+ */
+function processArg2($arg2) {
+    
+	$arr = explode("&", $arg2);
+	
+	//loop over all arguments in $arr array and get position for keyword and sort parameters.
+	for($i=0; $i<sizeof($arr); $i++){
+		
+		$pos1 = strpos($arr[$i], "keyword");
+		$pos2 = strpos($arr[$i], "sort");
+		
+		if($pos1 !== FALSE) 
+			$arr_key1 = $i;
+		
+		if($pos2 !== FALSE) 
+			$arr_key2 = $i;
+	}
+	
+	//get keyword value and remove parameter from $arr
+	$keyword_arr = explode("=", $arr[$arr_key1]);
+	$keyword = '';
+	if(sizeof($keyword_arr) > 1) {
+	  $keyword = $keyword_arr[1];
+	  unset($arr[$arr_key1]);
+	}
+	
+	//get sort value and remove parameter from $arr
+	$sort_arr = explode("=", $arr[$arr_key2]);
+	$sort = '';
+	if(sizeof($sort_arr) > 1) {
+	  $sort = $sort_arr[1];
+	  unset($arr[$arr_key2]);
+	}
+	
+	//combine $arr to get new arg(2) url
+	$q = implode("&", $arr);
+	
+	$arg_arr[0] = $q;
+	$arg_arr[1] = $keyword;
+	$arg_arr[2] = $sort;
+	
+	return $arg_arr;
+}
+
+/**
+* Rearrange Organization Structure Json 
+*
+**/
+function get_org_structure($org_str) {
+
+   $org_arr = array();
+   foreach($org_str['taxonomies'] as $org) {
+     $org_id = $org['taxonomy']['unique id'];
+	 unset($org['taxonomy']['unique id']);
+     $org_arr[$org_id] = $org['taxonomy'];
+   }
+   
+   return $org_arr;
+}
+
+
+/**
+ * Display individual dataset information - main block
+ *
+ **/
+function ckan_integration_dataset_main_info($dataset_id) {
+
+  $content = '';
+  
+  if($dataset_id != '') {
+	  $node = node_load(arg(1));
+	  $parent_nid = $node->field_parent['und'][0]['nid'];
+
+	  $q = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'api/3/action/package_search?q=id:' . $dataset_id;
+	  
+	  $ret = get_json_result($q);
+	   
+	  //wrapping whole content in div
+	  $content .= '<div class="primary">';
+	  $content .= '<article class="module prose">';
+	  
+	  //title
+	  $content .= '<section class="module-content">';
+	  $content .= '<h1>' . $ret['result']['results'][0]['title'] . '</h1>';
+	  
+	  //description
+	  $content .= '<div class="notes embedded-content">';
+	  $content .= $ret['result']['results'][0]['notes'];
+	  $content .= '</div>';
+	  $content .= '<span class="insert-comment-thread"></span>';
+	  $content .= '</section>';
+	  
+	  //resources
+	  $content .= '<section id="dataset-resources" class="resources module-content">';
+	  $content .= '<h3>Data and Resources</h3>';
+	  $content .= '<ul class="resource-list">';
+	  
+	  //loop over all resources
+	  foreach($ret['result']['results'][0]['resources'] as $resource) {
+		
+		$content .= '<li class="resource-item">';
+		
+		$res_title = '';
+
+		if(/*$resource['name'] == "Web Page" ||*/ $resource['format'] == '')
+		    $res_title = $resource['name'] . '<span class="format-label" data-format="data" property="dc:format"></span>';
+		else
+			$res_title = $resource['name'] . '<span class="format-label" data-format="' . strtolower($resource['format']) . '" property="dc:format">' .  strtoupper($resource['format']) . '</span>';
+		
+		$res_link = $GLOBALS['base_url'] . '/'. arg(0) . '/';
+
+        //check if child node exists
+		$check = db_query("SELECT 1 as exist from node where type = 'community_dataset_info_page' and status = 1 LIMIT 1");
+		foreach($check as $exist) {
+		   
+		  if($exist->exist == '1') {
+		    $child_id_arr = db_query("select entity_id from field_data_field_parent dp
+                                      inner join node on nid = dp.entity_id 
+                                      where status = 1 and field_parent_nid = " . arg(1));
+		  
+		  foreach ($child_id_arr as $record) 
+		    $res_link .= $record->entity_id . '/';
+		  }
+			
+		  $res_link .= 'dataset/' . $dataset_id . '/resource/' . $resource['id'];	
+		}
+		
+		$content .= l($res_title, $res_link, array('html' => ture, 'attributes' => array('class' => 'heading', 'title' => $resource['name'])));
+		
+		$pos = strpos($resource['description'], ' ', 65);
+		if ($pos !== false) {
+			$desc = substr($resource['description'], 0, $pos) . '...';
+		}
+		else
+		  $desc = $resource['description'];
+		
+	    $content .= '<p class="description">' . $desc . '</p>';
+		
+		$content .= '<div class="btn-group">';
+		
+		if(/*$resource['name'] == "Web Page" ||*/ $resource['format'] == "")
+			$content .= l('<i class="icon-external-link"></i>Visit Page', $resource['url'], array('html' => ture, 'attributes' => array('class' => 'btn btn-primary', 'target' => '_blank')) );
+		else
+			$content .= l('<i class="icon-download-alt"></i>Download', $resource['url'], array('html' => ture, 'attributes' => array('class' => 'btn btn-primary')) );
+			
+		$content .= '</div>';
+
+		$content .= '</li>';
+		
+	  }
+	  
+	  $content .= '</ul>';
+	  $content .= '</section>';
+	  
+	  //store extras array as key value pair - will be used for Metadata Source, Additional Info and Tags Sections
+	  foreach($ret['result']['results'][0]['extras'] as $item) {
+		
+		 $key = $item['key'];
+		 unset($item['key']);
+		 $extras[$key] = $item;
+	  
+	  }
+	  
+	  $mapping = array(
+		'resource-type' => 'Resource Type',
+		'metadata-date' => 'Metadata Date',
+		'dataset-reference-date' => 'Reference Date(s)',
+		'responsible-party' => 'Responsible Party',
+		'contact-email' => 'Contact Email',
+		'access_constraints' => 'Access Constraints',
+		'bbox-east-long' => 'Bbox East Long',
+		'bbox-north-lat' => 'Bbox North Lat',
+		'bbox-south-lat' => 'Bbox South Lat',
+		'bbox-west-long' => 'Bbox West Long',
+		'coupled-resource' => 'Coupled Resource',
+		'frequency-of-update' => 'Frequency Of Update',
+		'guid' => 'Guid',
+		'harvest_object_id' => 'Harvest Object Id',
+		'harvest_source_id' => 'Harvest Source Id',
+		'harvest_source_title' => 'Harvest Source Title',
+		'licence' => 'Licence',
+		'metadata-language' => 'Metadata Language',
+		'metadata_type' => 'Metadata Type',
+		'metadata_source' => 'Metadata Source',
+		'spatial' => 'Spatial',
+		'spatial-data-service-type' => 'Spatial Data Service Type',
+		'spatial-reference-system' => 'Spatial Reference System',
+		'temporal-extent-begin' => 'Temporal Extent Begin',
+		'temporal-extent-end' => 'Temporal Extent End',
+		'graphic-preview-file' => 'Graphic Preview File',
+		'access-level' => 'Access Level',
+		'data-dictiionary' => 'Data Dictiionary',
+		'issued' => 'Issued',
+		'metadata-source' => 'Metadata Source',
+		'theme' => 'Theme',
+		'person' => 'Person',
+		'references' => 'References',
+		'spatial-text' => 'Spatial Text',
+		'tags' => 'Tags',
+	  );
+	 
+	  //metadata source section  
+	  $metadata_list = '';
+	  
+	  if($extras['metadata_source']['value'] == 'arcgis') {
+	  
+	      $url_dld = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'harvest/object/' . $extras['harvest_object_id']['value'];
+		  
+	      $metadata_list .= '<li class="resource-item">';
+		  $metadata_list .= '<strong class="heading">';
+		  $metadata_list .= '<span class="format-label" data-format="ArcGIS JSON" property="dc:format">ArcGIS JSON</span>';
+		  $metadata_list .= 'ArcGIS JSON Metadata';
+          $metadata_list .= '</strong>';		  
+		  $metadata_list .= '<p class="description">';
+		  $metadata_list .= l('Download Metadata', $url_dld, array('html' => ture, 'attributes' => array('target' => '_blank')));
+		  $metadata_list .= '</p>';
+		  $metadata_list .= '</li>';
+	  }
+	  else {		  
+		  $url_dld = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'harvest/object/' . $extras['harvest_object_id']['value'];
+		  $url_dld_orig = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'harvest/object/' . $extras['harvest_object_id']['value'] . '/html';
+		 
+		  if(url_exists($url_dld) && $extras['harvest_object_id']['value'] != '') {
+		  
+			$metadata_list .= '<li class="resource-item">';
+			$metadata_list .= '<strong class="heading">';
+			$metadata_list .= '<span class="format-label" data-format="ISO-19139" property="dc:format">ISO-19139</span>';
+			$metadata_list .= 'ISO-19139 Metadata';
+			$metadata_list .= '</strong>';			
+			$metadata_list .= '<p class="description">';
+			$metadata_list .= l('Download Metadata - ', $url_dld, array('html' => ture, 'attributes' => array('target' => '_blank')));
+			$metadata_list .= l('View Full Metadata', $url_dld_orig, array('html' => ture, 'attributes' => array('target' => '_blank')));
+			$metadata_list .= '</p>';
+			$metadata_list .= '</li>';
+		  }
+		  
+		  $url_fgdc_orig = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'harvest/object/' . $extras['harvest_object_id']['value'] . '/original';
+		  $url_fgdc_full = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'harvest/object/' . $extras['harvest_object_id']['value'] . '/html/original';
+		  
+		  if(url_exists($url_fgdc_orig) && $extras['harvest_object_id']['value'] != '') {
+		  
+			$metadata_list .= '<li class="resource-item">';
+			$metadata_list .= '<strong class="heading">';
+			$metadata_list .= '<span class="format-label" data-format="FGDC" property="dc:format">FGDC</span>';
+			$metadata_list .= 'Original FGDC Metadata';
+			$metadata_list .= '</strong>';
+			$metadata_list .= '<p class="description">';	  
+			$metadata_list .= l('Download Original Metadata - ', $url_fgdc_orig, array('html' => ture, 'attributes' => array('target' => '_blank')));
+			$metadata_list .= l('View Original Full Metadata', $url_fgdc_full, array('html' => ture, 'attributes' => array('target' => '_blank')));
+			
+			$metadata_list .= '</p>';
+			$metadata_list .= '</li>';
+		  }
+	  }
+	  
+	  $content .= '<section id="dataset-metadata-source" class="resources module-content">';
+	  
+	  if($metadata_list != "") {	  
+	    $content .= '<h3>Metadata Source</h3>';
+	    $content .= '<ul class="resource-list">';
+  	    $content .= $metadata_list;
+	    $content .= '</ul>';
+	  }
+	  
+	  if($extras['harvest_source_title']['value'] != '') {
+		  $content .= '<br/><p class="muted">Harvested from ';
+
+		  $url = $GLOBALS['base_url'] . '/' . arg(0) . '/' . $parent_nid . '/&fq=harvest_source_id:' . $extras['harvest_source_id']['value'];
+		  
+		  $content .= l($extras['harvest_source_title']['value'], $url, array('html' => ture));
+		  
+		  $content .= '</p>';
+	  }
+	  
+	  $content .= '</section>';
+	  
+	  //Graphic Preview Section - Show this section only if graphic image is available
+	  if(isset($extras['graphic-preview-file'])) {
+		$content .= '<section id="dataset-graphic-preview" class="resources module-content">';
+		$content .= '<h3>Graphic Preview</h3>';
+		$content .= '<img title="Graphic Preview" alt="Graphic Preview" src="' . $extras['graphic-preview-file']['value'] . '">';
+		$content .= '</section>';
+	  }
+			
+	  //tags section
+	  $content .= '<section class="tags module-content">';
+	  $content .= '<ul class="tag-list well">';
+	  
+	  //split string by "," or " > "
+	  $tags_arr = preg_split( "/(,| > |>)/", $extras['tags']['value']);
+
+	  $url = $GLOBALS['base_url'] . '/' . arg(0) . '/' . $parent_nid . '/';
+	  $ext1 = '&fq=tags:';
+	  
+	  foreach($tags_arr as $tag){
+	    $ext2 = '';
+		$tag = strtolower(trim($tag));
+		
+	    $pos = strpos($tag, ' ', 19);
+		if ($pos !== false) 
+		  $tag_txt = substr($tag, 0, 19) . '...';
+		else
+		  $tag_txt = $tag;
+		  
+		$content .= '<li>';
+		$ext2 = '"' .  str_replace(" ", "+", urlencode($tag)) . '"';
+		$content .= l($tag_txt, $url . urlencode($ext1 . $ext2), array('html' => ture, 'attributes' => array('class' => 'tag')));
+		$content .= '</li>';
+	  }
+	  
+	  $content .= '</ul>';
+	  $content .= '</section>';
+	  
+	  drupal_add_js(drupal_get_path('module', 'ckan_integration') . '/js/ckan_integration.js', 'file');
+	    
+	  //additional info section	
+	  $additional_info = '';
+	  $additional_info .= '<section class="module-content additional-info">';
+	  $additional_info .= '<h3>Additional Info</h3>';
+	  $additional_info .= '<table class="table table-striped table-bordered table-condensed table-toggle-less" data-module="table-toggle-more" name="add_info">';
+	  $additional_info .= '<thead>';
+	  $additional_info .= '<tr>';
+	  $additional_info .= '<th scope="col">Field</th>';
+	  $additional_info .= '<th scope="col">Value</th>';
+	  $additional_info .= '</tr>';
+	  $additional_info .= '</thead>';
+	  
+	  $additional_info .= '<tbody>';
+	  
+	  $additional_info .= getAdditionalRow('resource-type', $extras, $mapping);  
+	  $additional_info .= getAdditionalRow('metadata-date', $extras, $mapping); 
+	  $additional_info .= getAdditionalRow('dataset-reference-date', $extras, $mapping); 
+	  $additional_info .= getAdditionalRow('responsible-party', $extras, $mapping); 
+	  $additional_info .= getAdditionalRow('contact-email', $extras, $mapping); 
+
+	  $additional_info .= getAdditionalRow('access-level', $extras, $mapping, true);
+	  $additional_info .= getAdditionalRow('data-dictiionary', $extras, $mapping, true);  
+	  $additional_info .= getAdditionalRow('access_constraints', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('bbox-east-long', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('bbox-north-lat', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('bbox-south-lat', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('bbox-west-long', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('coupled-resource', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('frequency-of-update', $extras, $mapping, true);
+	  $additional_info .= getAdditionalRow('issued', $extras, $mapping, true);  
+	  $additional_info .= getAdditionalRow('metadata-source', $extras, $mapping, true);  
+	  
+	  $additional_info .= getAdditionalRow('person', $extras, $mapping, true);  
+	  $additional_info .= getAdditionalRow('references', $extras, $mapping, true);  
+	  $additional_info .= getAdditionalRow('spatial-text', $extras, $mapping, true);  
+	  $additional_info .= getAdditionalRow('theme', $extras, $mapping, true);  
+
+	  //Show Graphic Preview File only if graphic image is available
+	  if(isset($extras['graphic-preview-file'])) {  
+		 $additional_info .= getAdditionalRow('graphic-preview-file', $extras, $mapping, true);
+	  }
+	  
+	  $additional_info .= getAdditionalRow('guid', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('harvest_object_id', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('harvest_source_id', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('harvest_source_title', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('metadata_source', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('licence', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('metadata-language', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('metadata_type', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('spatial', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('spatial-data-service-type', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('spatial-reference-system', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('temporal-extent-begin', $extras, $mapping, true); 
+	  $additional_info .= getAdditionalRow('temporal-extent-end', $extras, $mapping, true); 
+	  
+	  $additional_info .= '<tr class="toggle-seperator"><td colspan="2"> </td></tr>';
+	  $additional_info .= '<tr class="toggle-show toggle-show-more"><td colspan="2">';
+	  $additional_info .= '<small>';
+	  $additional_info .= ' <a class="show-more" href="#add_info">Show more</a>';
+	  $additional_info .= '<a class="show-less" href="#add_info">Hide</a>';
+	  $additional_info .= '</small>';
+	  $additional_info .= '</td></tr>';
+	  $additional_info .= '</tbody>';
+	  $additional_info .= '</table>';
+	  $additional_info .= '</section>';
+	  
+	  $content .= $additional_info;
+	  
+	  $content .= '</article>';
+	  $content .= '</div>';
+	 
+	  //use current theme
+	  //$content .= theme('ckan_integration');
+  }
+  
+  return $content;
+}
+
+/**
+ * Get individual row html for Additional Information Section - Dataset Info Page
+ * @param string $key - pointer for row
+ * @param array $extras - processed extras array from json result
+ * @param array $mapping - mapping of $key and corresponding Field value for table
+ * @param boolean $add_more_class - decides whether to add toggle class
+ *
+ * @return array array('$row' => 
+ *   $row: html row 
+ */
+function getAdditionalRow($key, $extras, $mapping, $add_more_class = false) {
+  
+    //get field name from $mapping array
+    $field = $mapping[$key];
+		
+	if($key == 'resource-type')
+      $value = ucwords($extras[$key]['value']);
+	elseif($key == 'metadata-date') {
+	   if($extras[$key]['value'] != "")
+	      $value = date('M d, Y', strtotime($extras[$key]['value']));
+	   else
+	      $value = "";
+	}
+	elseif($key == 'dataset-reference-date') {
+	  $string = json_decode($extras[$key]['value']);
+	  
+	  if(json_last_error() == JSON_ERROR_NONE) {
+	      	  
+   	    if($string[0]->value != "")
+	      $value = date('M d, Y', strtotime($string[0]->value)) . ' (' . $string[0]->type . ')';
+	    else
+	      $value = "";
+	  }
+	  else
+	    $value = $extras[$key]['value'];
+	}
+	elseif($key == 'responsible-party') {
+	  $string = json_decode($extras[$key]['value']);
+	  
+	  if($string[0]->roles[0] != "")
+	    $value = $string[0]->name . ' (' . $string[0]->roles[0] . ')';
+	  else
+	    $value = $string[0]->name;
+	}
+	else
+	  $value = $extras[$key]['value'];
+	
+	if($value == "[]")
+	  $value = "";
+	  
+	$row = '';
+	
+	//decide whether to add toggle class
+	if($add_more_class) {
+	  $row .= '<tr class="toggle-more" resource="_:extra" rel="dc:relation">';
+	  $row .= '<th class="dataset-label" property="rdfs:label" scope="row">' . $field . '</th>';
+	  $row .= '<td class="dataset-details" property="rdf:value">' . $value . '</td>';
+	}
+	else {
+	  $row .= '<tr>';
+	  $row .= '<th class="dataset-label" scope="row">' . $field . '</th>';
+	  
+	  if($value == '')
+	     $value = 'Unknown';
+		 
+	  $row .= '<td>' . $value . '</td>';
+	}
+	$row .= '</tr>';
+	
+	if($value == "")
+	  $row = '';
+	
+	return $row;
+}
+
+
+//Individual Dataset Information - Organization Banner Block
+function ckan_integration_dataset_org_banner($dataset_id, $org_mapping){
+
+  $content = '';
+
+  if($dataset_id != '') {
+  
+	  $q = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'api/3/action/package_search?q=id:' . $dataset_id;
+	  
+	  $ret = get_json_result($q);
+	  $org_str = $_SESSION['org_structure_json'];
+
+	  $content .= '<aside class="secondary">';
+	  $content .= '<div class="module context-info">';
+	  $content .= '<section class="module-content">';
+	  
+	  //organization type
+	  $org_name = $ret['result']['results'][0]['organization']['name'];
+	  $org_type = $org_mapping[$org_str[$org_name]['vocabulary']];
+	  
+	  $content .= '<span class="organization-type" data-organization-type="' . strtolower(str_replace(' Government', '', $org_type)) . '" title="' . $org_type . '">';
+	  
+      $content .= '<span>' . str_replace(' Government', '', $org_type) . '</span>';
+      $content .= '</span>';
+	  
+	  //organization banner
+	  $content .= '<div class="image">';
+	  $org_banner = '<img width="200" alt="' . $org_name . '" src="' . $ret['result']['results'][0]['organization']['image_url'] . '">';
+	  
+	  $content .= l($org_banner, variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'organization/about/' . $ret['result']['results'][0]['organization']['name'], array('html' => true, 'attributes' => array('target' => '_blank')));
+	  
+	  $content .= '</div>';
+	  
+	  $content .= '<h1 class="heading">' . $ret['result']['results'][0]['organization']['title'] . '</h1>';
+	  $content .= '<p>' . $ret['result']['results'][0]['organization']['description'] . " " . l('read more', variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'organization/about/' . $ret['result']['results'][0]['organization']['name'], array('html' => true, 'attributes' => array('target' => '_blank'))) . '</p>';
+	  $content .= '</section>';
+	  $content .= '</div>';
+	  $content .= '</aside>';
+
+  }
+  
+  return $content;
+}
+
+/**
+* Selected Resource Top Block
+*
+**/
+function ckan_integration_sel_resource($dataset_id, $resource_id){
+  
+  $q = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'api/3/action/package_search?q=id:' . $dataset_id;
+  $ret = get_json_result($q);
+  
+  $resource_arr = array();
+  
+  foreach($ret['result']['results'][0]['resources'] as $resource) {
+    $res_id = $resource['id'];
+	unset($resource['id']);
+    $resource_arr[$res_id] = $resource;    
+  }
+  
+  $content = '<h1>' . $ret['result']['results'][0]['title'] . '</h1>';
+  $content .= '<section class="module module-resource">';
+  $content .= '<div class="module-content">';
+  $content .= '<div class="actions">'; 
+  $content .= '<ul><li>';
+
+  if(/*$resource_arr[$resource_id]['name'] == "Web Page" ||*/ $resource_arr[$resource_id]['format'] == '')
+	$content .= l('<i class="icon-external-link"></i>Visit Page', $resource_arr[$resource_id]['url'], array('html' => ture, 'attributes' => array('class' => 'btn btn-primary resource-url-analytics resource-type-None', 'target' => '_blank')) );
+  else
+	$content .= l('<i class="icon-download-alt"></i>Download', $resource_arr[$resource_id]['url'], array('html' => ture, 'attributes' => array('class' => 'btn btn-primary resource-url-analytics resource-type-None')) );
+	
+  $content .= '</li></ul>';
+
+  $content .= '</div>';
+  $content .= '<h1 class="page-heading">' . $resource_arr[$resource_id]['name'] . '</h1>';
+  $content .= '<p class="muted ellipsis">URL:';
+  $content .= l($resource_arr[$resource_id]['url'], $resource_arr[$resource_id]['url'], array('html' => true));
+  $content .= '</p>';
+  $content .= '<div class="prose notes" property="rdfs:label">';
+  $content .= '<p>' . $resource_arr[$resource_id]['description'] . '</p>';
+  $content .= '</div>';
+  $content .= '</div>';
+  
+  return $content;
+  
+}
+
+/**
+* Selected Resource Additional Information
+*
+**/
+function ckan_integration_add_resource_info($dataset_id, $resource_id) {
+
+  $mapping = array(
+			    'last_modified' => 'Last updated',
+				'created' => 'Created',
+				'format' => 'Format',
+				'position' => 'position',
+				'resource_group_id' => 'resource group id',
+				'revision_id' => 'revision id',
+				'revision_timestamp' => 'revision timestamp',
+				'state' => 'state',
+             );
+
+  $q = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'api/3/action/package_search?q=id:' . $dataset_id;
+  $ret = get_json_result($q);
+  
+  $resource_arr = array();
+  
+  foreach($ret['result']['results'][0]['resources'] as $resource) {
+    $res_id = $resource['id'];
+	unset($resource['id']);
+    $resource_arr[$res_id] = $resource;    
+  }
+  
+  $content = '';
+  
+  $content .= '<div class="primary">';
+  $content .= '<section class="module">';
+  $content .= '<div class="module-content">';
+  $content .= '<h2>Additional Information</h2>';
+  
+  //table
+  $content .= '<table class="table table-striped table-bordered table-condensed table-toggle-less" data-module="table-toggle-more" name="add_info">';
+  $content .= '<thead><tr>';
+  $content .= '<th scope="col">Field</th>';
+  $content .= '<th scope="col">Value</th>';
+  $content .= '</tr></thead>';
+  $content .= '<tbody>';
+  
+  $content .= getResourceInfoRow('last_modified', $resource_arr[$resource_id], $mapping, false);
+  $content .= getResourceInfoRow('created', $resource_arr[$resource_id], $mapping, false);
+  $content .= getResourceInfoRow('format', $resource_arr[$resource_id], $mapping, false);
+  
+  $content .= '<th scope="row">id</th>';
+  $content .= '<td>' . $resource_id . '</td>';
+  $content .= '</tr>';
+  
+  $content .= getResourceInfoRow('position', $resource_arr[$resource_id], $mapping, true);
+  $content .= getResourceInfoRow('resource_group_id', $resource_arr[$resource_id], $mapping, true);
+  $content .= getResourceInfoRow('revision_id', $resource_arr[$resource_id], $mapping, true);
+  $content .= getResourceInfoRow('revision_timestamp', $resource_arr[$resource_id], $mapping, true);
+  $content .= getResourceInfoRow('state', $resource_arr[$resource_id], $mapping, true);
+  
+  $content .= '<tr class="toggle-seperator"><td colspan="2"> </td></tr>';
+  $content .= '<tr class="toggle-show toggle-show-more">';
+  $content .= '<td colspan="2">';
+  $content .= '<small>';
+  $content .= '<a class="show-more" href="#add_info">Show more</a>';
+  $content .= '<a class="show-less" href="#add_info">Hide</a>';
+  $content .= '</small>';
+  $content .= '</td>';
+  $content .= '</tr>';
+  
+  $content .= '</tbody>';
+  $content .= '</table>';
+  $content .= '</div>';
+  $content .= '</section>';
+  $content .= '</div>';
+  
+  drupal_add_js(drupal_get_path('module', 'ckan_integration') . '/js/ckan_integration.js', 'file');
+ 
+  return $content;
+}
+
+/**
+ * Get individual row html for Additional Information Section - Resource Info Page
+ * @param string $key - pointer for row
+ * @param array $resource - processed resource array from json result
+ * @param array $mapping - mapping of $key and corresponding Field value for table
+ * @param boolean $add_more_class - decides whether to add toggle class
+ *
+ * @return array array('$row' => 
+ *   $row: html row 
+ */
+function getResourceInfoRow($key, $resource, $mapping, $add_more_class = false) { 
+   
+   $field = $mapping[$key];
+   
+   if($key == 'created' || $key == 'revision_timestamp') {
+     if($resource[$key] != "")
+	    $value = date('M d, Y', strtotime($resource[$key]));
+     else
+	    $value = "";
+   }
+   elseif($key == 'last_modified') {
+	if($resource[$key] != "")
+	    $value = date('M d, Y', strtotime($resource[$key]));
+    else
+	    $value = date('M d, Y', strtotime($resource['created']));
+   }
+   else
+     $value = $resource[$key];
+   
+   $row = '';
+   if($add_more_class)
+     $row .= '<tr class="toggle-more">';
+   else
+     $row .= '<tr>';
+	 
+   $row .= '<th scope="row">' . $field . '</th>';
+   $row .= '<td>' . $value . '</td>';
+   $row .= '</tr>';
+   
+   return $row;
+}
+
+//get Resource List Block
+function ckan_integration_get_resource_list($dataset_id, $resource_id) {
+
+  $q = variable_get(ckan_server_info, 'http://catalog.data.gov/') . 'api/3/action/package_search?q=id:' . $dataset_id;
+  $ret = get_json_result($q);
+  
+  $resource_arr = array();
+  
+  foreach($ret['result']['results'][0]['resources'] as $resource) {
+    $position = $resource['position'];
+	unset($resource['position']);
+    $resource_arr[$position] = $resource;    
+  }
+  
+  $content = '';
+  $content .= '<aside class="secondary">';
+  $content .= '<section class="module module-narrow resources">';
+  $content .= '<h2 class="module-heading"><i class="icon-copy"></i>Resources</h2>';
+  $content .= '<ul class="unstyled nav nav-simple">';
+  
+  $res_link = $GLOBALS['base_url'] . '/'. arg(0) . '/' . arg(1) . '/dataset/' . $dataset_id . '/resource/';
+  
+  for($i=0; $i<sizeof($resource_arr); $i++) {
+     if($resource_arr[$i]['id'] == $resource_id)
+	   $content .= '<li class="nav-item active">';
+	 else
+	   $content .= '<li class="nav-item">';
+	 
+	 $content .= l('<span>' . $resource_arr[$i]['name'] . '</span>', $res_link . $resource_arr[$i]['id'], array('html' => ture, 'attributes' => array('class' => ' active')));
+	 $content .= '</li>';
+  }
+  
+  $content .= '</ul>';
+  $content .= '</section>';
+  $content .= '</aside>';
+  
+  return $content;
+
+}
+
+//check if page exists
+function url_exists($url) {
+   @$headers = get_headers($url); 
+if (preg_match('/^HTTP\/\d\.\d\s+(200|301|302)/', $headers[0])){
+   return true; 
+}
+else return false;
+}
